@@ -12,6 +12,7 @@ describe('web worker transfer', () => {
             dataView;
             imageData;
             array;
+            set;
 
             constructor(n) {
                 this.n = n;
@@ -20,6 +21,7 @@ describe('web worker transfer', () => {
                 this.imageData = new ImageData(8, 5);
                 this.blob = new Blob();
                 this.array = [true, 1, 'one', new ArrayBuffer(100)];
+                this.set = new Set([true, 1, 'one', new ArrayBuffer(100)]);
                 this.squared();
             }
 
@@ -51,6 +53,7 @@ describe('web worker transfer', () => {
         expect(deserialized.squared() === 100).toBeTruthy();
         expect(deserialized.dataView instanceof DataView).toBeTruthy();
         expect(deserialized.array).toEqual(serializableMock.array);
+        expect(deserialized.set).toEqual(serializableMock.set);
     });
 
     test('anonymous class', () => {

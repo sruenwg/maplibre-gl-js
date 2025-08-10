@@ -170,6 +170,13 @@ export function serialize(input: unknown, transferables?: Array<Transferable> | 
         }
         return serialized;
     }
+    if (input instanceof Set) {
+        const items: Array<Serialized> = [];
+        for (const item of input) {
+            items.push(serialize(item, transferables));
+        }
+        return {'$name': 'Set', items};
+    }
 
     if (typeof input !== 'object') {
         throw new Error(`can't serialize object of type ${typeof input}`);
@@ -225,6 +232,9 @@ export function deserialize(input: Serialized): unknown {
 
     if (Array.isArray(input)) {
         return input.map(deserialize);
+    }
+    if (input['$name'] === 'Set') {
+        return new Set((input['items'] as Array<Serialized>).map(deserialize));
     }
 
     if (typeof input !== 'object') {
