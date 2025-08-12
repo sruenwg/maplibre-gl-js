@@ -223,7 +223,7 @@ class SourceExpressionBinder implements AttributeBinder {
             if (this.paintVertexBuffer && this.paintVertexBuffer.buffer) {
                 this.paintVertexBuffer.updateData(this.paintVertexArray);
             } else {
-                this.paintVertexBuffer = context.createVertexBuffer(this.paintVertexArray, this.paintVertexAttributes, this.expression.isStateDependent);
+                this.paintVertexBuffer = context.createVertexBuffer(this.paintVertexArray, this.paintVertexAttributes, this.expression.isStateDependent || this.expression.globalStateRefs.size > 0);
             }
         }
     }
@@ -299,7 +299,7 @@ class CompositeExpressionBinder implements AttributeBinder, UniformBinder {
             if (this.paintVertexBuffer && this.paintVertexBuffer.buffer) {
                 this.paintVertexBuffer.updateData(this.paintVertexArray);
             } else {
-                this.paintVertexBuffer = context.createVertexBuffer(this.paintVertexArray, this.paintVertexAttributes, this.expression.isStateDependent);
+                this.paintVertexBuffer = context.createVertexBuffer(this.paintVertexArray, this.paintVertexAttributes, this.expression.isStateDependent || this.expression.globalStateRefs.size > 0);
             }
         }
     }
@@ -388,8 +388,8 @@ class CrossFadedCompositeBinder implements AttributeBinder {
 
     upload(context: Context) {
         if (this.zoomInPaintVertexArray && this.zoomInPaintVertexArray.arrayBuffer && this.zoomOutPaintVertexArray && this.zoomOutPaintVertexArray.arrayBuffer) {
-            this.zoomInPaintVertexBuffer = context.createVertexBuffer(this.zoomInPaintVertexArray, patternAttributes.members, this.expression.isStateDependent);
-            this.zoomOutPaintVertexBuffer = context.createVertexBuffer(this.zoomOutPaintVertexArray, patternAttributes.members, this.expression.isStateDependent);
+            this.zoomInPaintVertexBuffer = context.createVertexBuffer(this.zoomInPaintVertexArray, patternAttributes.members, this.expression.isStateDependent || this.expression.globalStateRefs.size > 0);
+            this.zoomOutPaintVertexBuffer = context.createVertexBuffer(this.zoomOutPaintVertexArray, patternAttributes.members, this.expression.isStateDependent || this.expression.globalStateRefs.size > 0);
         }
     }
 
@@ -492,22 +492,43 @@ export class ProgramConfiguration {
         vtLayer: VectorTileLayer,
         layer: TypedStyleLayer,
         options: PaintOptions
-    ): boolean {
-        let dirty: boolean = false;
-        for (const id in featureStates) {
-            const positions = featureMap.getPositions(id);
+    ) {
+        return this.updatePaintArraysForFeatures(Object.keys(featureStates), featureStates, featureMap, vtLayer, layer, options);
+    }
 
+    updateAllPaintArrays(
+        featureStates: FeatureStates,
+        featureMap: FeaturePositionMap,
+        vtLayer: VectorTileLayer,
+        layer: TypedStyleLayer,
+        options: PaintOptions,
+    ) {
+        return this.updatePaintArraysForFeatures([...featureMap.getUniqueFeatureIds()], featureStates, featureMap, vtLayer, layer, options);
+    }
+
+    updatePaintArraysForFeatures(
+        featureIds: (string | number)[],
+        featureStates: FeatureStates,
+        featureMap: FeaturePositionMap,
+        vtLayer: VectorTileLayer,
+        layer: TypedStyleLayer,
+        options: PaintOptions,
+    ) {
+        let dirty = false;
+        for (const featureId of featureIds) {
+            const positions = featureMap.getPositions(featureId);
+    
             for (const pos of positions) {
                 const feature = vtLayer.feature(pos.index);
-
+    
                 for (const property in this.binders) {
                     const binder = this.binders[property];
-                    if ((binder instanceof SourceExpressionBinder || binder instanceof CompositeExpressionBinder ||
-                         binder instanceof CrossFadedCompositeBinder) && (binder as any).expression.isStateDependent === true) {
+                    if ((binder instanceof SourceExpressionBinder || binder instanceof CompositeExpressionBinder || binder instanceof CrossFadedCompositeBinder) &&
+                        (binder.expression.isStateDependent || binder.expression.globalStateRefs.size > 0)) {
                         //AHM: Remove after https://github.com/mapbox/mapbox-gl-js/issues/6255
                         const value = (layer.paint as any).get(property);
-                        (binder as any).expression = value.value;
-                        (binder as AttributeBinder).updatePaintArray(pos.start, pos.end, feature, featureStates[id], options);
+                        binder.expression = value.value;
+                        binder.updatePaintArray(pos.start, pos.end, feature, featureStates[featureId], options);
                         dirty = true;
                     }
                 }
@@ -655,6 +676,12 @@ export class ProgramConfigurationSet<Layer extends TypedStyleLayer> {
     updatePaintArrays(featureStates: FeatureStates, vtLayer: VectorTileLayer, layers: ReadonlyArray<TypedStyleLayer>, options: PaintOptions) {
         for (const layer of layers) {
             this.needsUpload = this.programConfigurations[layer.id].updatePaintArrays(featureStates, this._featureMap, vtLayer, layer, options) || this.needsUpload;
+        }
+    }
+
+    updateAllPaintArrays(featureStates: FeatureStates, vtLayer: VectorTileLayer, layers: ReadonlyArray<TypedStyleLayer>, options: PaintOptions) {
+        for (const layer of layers) {
+            this.needsUpload = this.programConfigurations[layer.id].updateAllPaintArrays(featureStates, this._featureMap, vtLayer, layer, options) || this.needsUpload;
         }
     }
 

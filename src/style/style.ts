@@ -344,16 +344,38 @@ export class Style extends Evented {
 
     /**
      * @internal
-     * Find all sources that are affected by the global state changes and reload them.
-     * Find all paint properties that are affected by the global state changes and update them.
-     * For example, if a layer filter uses global-state expression, this function will find the source id of that layer.
+     * For the given global state changes, reload sources requiring a reload and
+     * stage source layers requiring a repaint.
      */
     _applyGlobalStateChanges(globalStateRefs: string[]) {
-        if (globalStateRefs.length === 0) {
-            return;
-        }
+        const {sourceIdsToReload, sourceLayerIdsToRepaint} = this._findGlobalStateAffectedSourcesAndLayers(globalStateRefs);
 
+        for (const id in this.sourceCaches) {
+            if (sourceIdsToReload.has(id)) {
+                this._reloadSource(id);
+                this._changed = true;
+            } else if (sourceLayerIdsToRepaint[id]?.size) {
+                this.sourceCaches[id].markSourceLayerForRepaint([...sourceLayerIdsToRepaint[id]]);
+            }
+        }
+    }
+
+    /**
+     * @internal
+     * Find all sources requiring a reload and source layers requiring a repaint
+     * due to global state changes. For example, if a layer filter uses a
+     * global-state expression, this function will return the source ID of that
+     * style layer as requiring a reload; if a paint property also uses a
+     * global-state expression, this function will also return the source layer
+     * ID of that style layer as requiring a repaint.
+     */
+    _findGlobalStateAffectedSourcesAndLayers(globalStateRefs: string[]) {
         const sourceIdsToReload = new Set<string>();
+        const sourceLayerIdsToRepaint: {[sourceId: string]: Set<string>} = {};
+
+        if (globalStateRefs.length === 0) {
+            return {sourceIdsToReload, sourceLayerIdsToRepaint};
+        }
 
         for (const layerId in this._layers) {
             const layer = this._layers[layerId];
@@ -364,20 +386,15 @@ export class Style extends Evented {
                 if (layoutAffectingGlobalStateRefs.has(ref)) {
                     sourceIdsToReload.add(layer.source);
                 }
-                if (paintAffectingGlobalStateRefs.has(ref)) {
-                    for (const {name, value} of paintAffectingGlobalStateRefs.get(ref)) {
-                        this._updatePaintProperty(layer, name, value);
+                if (layer.source && paintAffectingGlobalStateRefs.has(ref)) {
+                    if (sourceLayerIdsToRepaint[layer.source] === undefined) {
+                        sourceLayerIdsToRepaint[layer.source] = new Set();
                     }
+                    sourceLayerIdsToRepaint[layer.source].add(layer.sourceLayer || '_geojsonTileLayer');
                 }
             }
         }
-
-        for (const id in this.sourceCaches) {
-            if (sourceIdsToReload.has(id)) {
-                this._reloadSource(id);
-                this._changed = true;
-            }
-        }
+        return {sourceIdsToReload, sourceLayerIdsToRepaint};
     }
 
     loadURL(url: string, options: StyleSwapOptions & StyleSetterOptions = {}, previousStyle?: StyleSpecification) {

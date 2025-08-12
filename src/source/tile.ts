@@ -22,6 +22,7 @@ import type {DEMData} from '../data/dem_data';
 import type {AlphaImage} from '../util/image';
 import type {ImageAtlas} from '../render/image_atlas';
 import type {ImageManager} from '../render/image_manager';
+import type {Painter} from '../render/painter';
 import type {Context} from '../gl/context';
 import type {OverscaledTileID} from './tile_id';
 import type {Framebuffer} from '../gl/framebuffer';
@@ -34,6 +35,7 @@ import type {VectorTileLayer} from '@mapbox/vector-tile';
 import type {ExpiryData} from '../util/ajax';
 import type {QueryRenderedFeaturesOptionsStrict} from './query_features';
 import type {FeatureIndex, QueryResults} from '../data/feature_index';
+
 /**
  * The tile's state, can be:
  *
@@ -409,30 +411,51 @@ export class Tile {
         }
     }
 
-    setFeatureState(states: LayerFeatureStates, painter: any) {
-        if (!this.latestFeatureIndex ||
-            !this.latestFeatureIndex.rawTileData ||
-            Object.keys(states).length === 0) {
+    /**
+     * @internal
+     * Updates the features in this tile's buckets using the given global and
+     * feature states.
+     * 
+     * @param target - The target features to update. If 'all', this function
+     * updates every feature in every bucket. Otherwise, this function updates
+     * every feature contained in the given `sourceLayersToRepaint` in addition
+     * to individual features included in `featuresChangedByLayer`.
+     */
+    updateGlobalAndFeatureStates(
+        target: 'all' | {
+            sourceLayersToRepaint: Set<string>;
+            featuresChangedByLayer: LayerFeatureStates;
+        },
+        globalState: Record<string, any>,
+        layerFeatureStates: LayerFeatureStates,
+        painter: Painter,
+    ) {
+        if (!this.latestFeatureIndex?.rawTileData || (target !== 'all' && (target.sourceLayersToRepaint.size === 0 && Object.keys(target.featuresChangedByLayer).length === 0))) {
             return;
         }
 
         const vtLayers = this.latestFeatureIndex.loadVTLayers();
 
         for (const id in this.buckets) {
-            if (!painter.style.hasLayer(id)) continue;
+            const layer = painter.style?.getLayer(id);
+            if (!layer) {
+                continue;
+            }
 
             const bucket = this.buckets[id];
             // Buckets are grouped by common source-layer
-            const sourceLayerId = bucket.layers[0]['sourceLayer'] || '_geojsonTileLayer';
+            const sourceLayerId: string = bucket.layers[0]['sourceLayer'] || '_geojsonTileLayer';
             const sourceLayer = vtLayers[sourceLayerId];
-            const sourceLayerStates = states[sourceLayerId];
-            if (!sourceLayer || !sourceLayerStates || Object.keys(sourceLayerStates).length === 0) continue;
 
-            bucket.update(sourceLayerStates, sourceLayer, this.imageAtlas && this.imageAtlas.patternPositions || {});
-            const layer = painter && painter.style && painter.style.getLayer(id);
-            if (layer) {
-                this.queryPadding = Math.max(this.queryPadding, layer.queryRadius(bucket));
+            if (target === 'all' || target.sourceLayersToRepaint.has(sourceLayerId)) {
+                bucket.updateAll(layerFeatureStates[sourceLayerId] ?? {}, globalState, sourceLayer, this.imageAtlas?.patternPositions ?? {});
+            } else if (sourceLayerId in target.featuresChangedByLayer) {
+                bucket.update(target.featuresChangedByLayer[sourceLayerId], globalState, sourceLayer, this.imageAtlas?.patternPositions ?? {});
+            } else {
+                continue;
             }
+
+            this.queryPadding = Math.max(this.queryPadding, layer.queryRadius(bucket));
         }
     }
 

@@ -40,6 +40,8 @@ export class FillBucket implements Bucket {
     layerIds: Array<string>;
     stateDependentLayers: Array<FillStyleLayer>;
     stateDependentLayerIds: Array<string>;
+    globalStateDependentLayers: Array<FillStyleLayer>;
+    globalStateDependentLayerIds: Array<string>;
     patternFeatures: Array<BucketFeature>;
     globalState: Record<string, any>;
 
@@ -75,6 +77,7 @@ export class FillBucket implements Bucket {
         this.segments = new SegmentVector();
         this.segments2 = new SegmentVector();
         this.stateDependentLayerIds = this.layers.filter((l) => l.isStateDependent()).map((l) => l.id);
+        this.globalStateDependentLayerIds = this.layers.filter((l) => l.isGlobalStateDependent()).map((l) => l.id);
     }
 
     populate(features: Array<IndexedFeature>, options: PopulateParameters, canonical: CanonicalTileID) {
@@ -128,14 +131,14 @@ export class FillBucket implements Bucket {
         }
     }
 
-    update(states: FeatureStates, vtLayer: VectorTileLayer, imagePositions: {
-        [_: string]: ImagePosition;
-    }) {
+    update(featureStates: FeatureStates, globalState: Record<string, any>, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}) {
         if (!this.stateDependentLayers.length) return;
-        this.programConfigurations.updatePaintArrays(states, vtLayer, this.stateDependentLayers, {
-            imagePositions,
-            globalState: this.globalState
-        });
+        this.programConfigurations.updatePaintArrays(featureStates, vtLayer, this.stateDependentLayers, {imagePositions, globalState});
+    }
+
+    updateAll(featureStates: FeatureStates, globalState: Record<string, any>, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}) {
+        if (!this.globalStateDependentLayers.length) return;
+        this.programConfigurations.updateAllPaintArrays(featureStates, vtLayer, this.globalStateDependentLayers, {imagePositions, globalState});
     }
 
     addFeatures(options: PopulateParameters, canonical: CanonicalTileID, imagePositions: {

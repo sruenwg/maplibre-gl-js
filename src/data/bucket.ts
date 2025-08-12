@@ -83,8 +83,11 @@ export interface Bucket {
     readonly layers: Array<any>;
     readonly stateDependentLayers: Array<any>;
     readonly stateDependentLayerIds: Array<string>;
+    readonly globalStateDependentLayers: Array<any>;
+    readonly globalStateDependentLayerIds: Array<string>;
     populate(features: Array<IndexedFeature>, options: PopulateParameters, canonical: CanonicalTileID): void;
-    update(states: FeatureStates, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}): void;
+    update(featureStates: FeatureStates, globalState: Record<string, any>, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}): void;
+    updateAll(featureStates: FeatureStates, globalState: Record<string, any>, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}): void;
     isEmpty(): boolean;
     upload(context: Context): void;
     uploadPending(): boolean;
@@ -117,6 +120,9 @@ export function deserialize(input: Array<Bucket>, style: Style): {[_: string]: B
         (bucket as any).layers = layers;
         if (bucket.stateDependentLayerIds) {
             (bucket as any).stateDependentLayers = bucket.stateDependentLayerIds.map((lId) => layers.filter((l) => l.id === lId)[0]);
+        }
+        if (bucket.globalStateDependentLayerIds) {
+            (bucket as any).globalStateDependentLayers = bucket.globalStateDependentLayerIds.map((lId) => layers.filter((l) => l.id === lId)[0]);
         }
         for (const layer of layers) {
             output[layer.id] = bucket;

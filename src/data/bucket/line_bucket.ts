@@ -105,6 +105,8 @@ export class LineBucket implements Bucket {
     gradients: {[x: string]: GradientTexture};
     stateDependentLayers: Array<any>;
     stateDependentLayerIds: Array<string>;
+    globalStateDependentLayers: Array<any>;
+    globalStateDependentLayerIds: Array<string>;
     patternFeatures: Array<BucketFeature>;
     lineClipsArray: Array<LineClips>;
 
@@ -144,6 +146,7 @@ export class LineBucket implements Bucket {
         this.maxLineLength = 0;
 
         this.stateDependentLayerIds = this.layers.filter((l) => l.isStateDependent()).map((l) => l.id);
+        this.globalStateDependentLayerIds = this.layers.filter((l) => l.isGlobalStateDependent()).map((l) => l.id);
     }
 
     populate(features: Array<IndexedFeature>, options: PopulateParameters, canonical: CanonicalTileID) {
@@ -199,12 +202,14 @@ export class LineBucket implements Bucket {
         }
     }
 
-    update(states: FeatureStates, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}) {
+    update(featureStates: FeatureStates, globalState: Record<string, any>, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}) {
         if (!this.stateDependentLayers.length) return;
-        this.programConfigurations.updatePaintArrays(states, vtLayer, this.stateDependentLayers, {
-            imagePositions,
-            globalState: this.globalState
-        });
+        this.programConfigurations.updatePaintArrays(featureStates, vtLayer, this.stateDependentLayers, {imagePositions, globalState});
+    }
+
+    updateAll(featureStates: FeatureStates, globalState: Record<string, any>, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}) {
+        if (!this.globalStateDependentLayers.length) return;
+        this.programConfigurations.updateAllPaintArrays(featureStates, vtLayer, this.globalStateDependentLayers, {imagePositions, globalState});
     }
 
     addFeatures(options: PopulateParameters, canonical: CanonicalTileID, imagePositions: {[_: string]: ImagePosition}) {

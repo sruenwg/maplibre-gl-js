@@ -82,6 +82,7 @@ export class SourceCache extends Evented {
     usedForTerrain: boolean;
     tileSize: number;
     _state: SourceFeatureState;
+    _sourceLayersToRepaint: Set<string>;
     _loadedParentTiles: {[_: string]: Tile};
     _loadedSiblingTiles: {[_: string]: Tile};
     _didEmitContent: boolean;
@@ -118,6 +119,7 @@ export class SourceCache extends Evented {
 
         this._coveredTiles = {};
         this._state = new SourceFeatureState();
+        this._sourceLayersToRepaint = new Set();
         this._didEmitContent = false;
         this._updated = false;
     }
@@ -211,7 +213,25 @@ export class SourceCache extends Evented {
             this._source.prepare();
         }
 
-        this._state.coalesceChanges(this._tiles, this.map ? this.map.painter : null);
+        const {featuresChanged: featuresChangedByLayer, coalescedState: layerFeatureStates} = this._state.coalesceChanges();
+        const globalState = this.style.getGlobalState();
+
+        if (this.map?.painter && (Object.keys(featuresChangedByLayer).length || this._sourceLayersToRepaint.size)) {
+            for (const id in this._tiles) {
+                const tile = this._tiles[id];
+                tile.updateGlobalAndFeatureStates(
+                    {
+                        sourceLayersToRepaint: this._sourceLayersToRepaint,
+                        featuresChangedByLayer,
+                    },
+                    globalState,
+                    layerFeatureStates,
+                    this.map.painter,
+                );
+            }
+        }
+        this._sourceLayersToRepaint.clear();
+
         for (const i in this._tiles) {
             const tile = this._tiles[i];
             tile.upload(context);
@@ -296,7 +316,9 @@ export class SourceCache extends Evented {
         if (previousState === 'expired') tile.refreshedUponExpiration = true;
         this._setTileReloadTimer(id, tile);
         if (this.getSource().type === 'raster-dem' && tile.dem) this._backfillDEM(tile);
-        this._state.initializeTileState(tile, this.map ? this.map.painter : null);
+        if (this.map?.painter) {
+            tile.updateGlobalAndFeatureStates('all', this.style.getGlobalState(), this._state.state, this.map.painter);
+        }
 
         if (!tile.aborted) {
             this._source.fire(new Event('data', {dataType: 'source', tile, coord: tile.tileID}));
@@ -859,7 +881,9 @@ export class SourceCache extends Evented {
             this._setTileReloadTimer(tileID.key, tile);
             // set the tileID because the cached tile could have had a different wrap value
             tile.tileID = tileID;
-            this._state.initializeTileState(tile, this.map ? this.map.painter : null);
+            if (this.map?.painter) {
+                tile.updateGlobalAndFeatureStates('all', this.style.getGlobalState(), this._state.state, this.map.painter);
+            }
             if (this._cacheTimers[tileID.key]) {
                 clearTimeout(this._cacheTimers[tileID.key]);
                 delete this._cacheTimers[tileID.key];
@@ -1102,6 +1126,16 @@ export class SourceCache extends Evented {
     getFeatureState(sourceLayer: string, featureId: number | string) {
         sourceLayer = sourceLayer || '_geojsonTileLayer';
         return this._state.getState(sourceLayer, featureId);
+    }
+
+    /**
+     * Mark the given source layers as awaiting a repaint due to a global state
+     * change.
+     */
+    markSourceLayerForRepaint(sourceLayerIds: string[]) {
+        for (const sourceLayerId of sourceLayerIds) {
+            this._sourceLayersToRepaint.add(sourceLayerId);
+        }
     }
 
     /**

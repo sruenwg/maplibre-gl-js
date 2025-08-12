@@ -317,6 +317,8 @@ export class SymbolBucket implements Bucket {
     layerIds: Array<string>;
     stateDependentLayers: Array<SymbolStyleLayer>;
     stateDependentLayerIds: Array<string>;
+    globalStateDependentLayers: Array<SymbolStyleLayer>;
+    globalStateDependentLayerIds: Array<string>;
 
     index: number;
     sdfIcons: boolean;
@@ -399,6 +401,7 @@ export class SymbolBucket implements Bucket {
         }
 
         this.stateDependentLayerIds = this.layers.filter((l) => l.isStateDependent()).map((l) => l.id);
+        this.globalStateDependentLayerIds = this.layers.filter((l) => l.isGlobalStateDependent()).map((l) => l.id);
 
         this.sourceID = options.sourceID;
     }
@@ -559,16 +562,16 @@ export class SymbolBucket implements Bucket {
         }
     }
 
-    update(states: FeatureStates, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}) {
+    update(featureStates: FeatureStates, globalState: Record<string, any>, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}) {
         if (!this.stateDependentLayers.length) return;
-        this.text.programConfigurations.updatePaintArrays(states, vtLayer, this.layers, {
-            imagePositions,
-            globalState: this.globalState
-        });
-        this.icon.programConfigurations.updatePaintArrays(states, vtLayer, this.layers, {
-            imagePositions,
-            globalState: this.globalState
-        });
+        this.text.programConfigurations.updatePaintArrays(featureStates, vtLayer, this.stateDependentLayers, {imagePositions, globalState});
+        this.icon.programConfigurations.updatePaintArrays(featureStates, vtLayer, this.stateDependentLayers, {imagePositions, globalState});
+    }
+
+    updateAll(featureStates: FeatureStates, globalState: Record<string, any>, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}) {
+        if (!this.globalStateDependentLayers.length) return;
+        this.text.programConfigurations.updateAllPaintArrays(featureStates, vtLayer, this.globalStateDependentLayers, {imagePositions, globalState});
+        this.icon.programConfigurations.updateAllPaintArrays(featureStates, vtLayer, this.globalStateDependentLayers, {imagePositions, globalState});
     }
 
     isEmpty() {

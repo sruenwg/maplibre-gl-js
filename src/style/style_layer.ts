@@ -171,7 +171,6 @@ export abstract class StyleLayer extends Evented {
     /**
      * Get list of global state references that are used within layout or filter properties.
      * This is used to determine if layer source need to be reloaded when global state property changes.
-     *
      */
     getLayoutAffectingGlobalStateRefs(): Set<string> {
         const globalStateRefs = new Set<string>();
@@ -196,19 +195,16 @@ export abstract class StyleLayer extends Evented {
     /**
      * Get list of global state references that are used within paint properties.
      * This is used to determine if layer needs to be repainted when global state property changes.
-     *
      */
-    getPaintAffectingGlobalStateRefs(): globalThis.Map<string, Array<{name: string; value: any}>> {
-        const globalStateRefs = new globalThis.Map<string, Array<{name: string; value: any}>>();
+    getPaintAffectingGlobalStateRefs(): Set<string> {
+        const globalStateRefs = new Set<string>();
 
         if (this._transitionablePaint) {
             for (const propertyName in this._transitionablePaint._values) {
                 const value = this._transitionablePaint._values[propertyName].value;
 
                 for (const globalStateRef of value.getGlobalStateRefs()) {
-                    const properties = globalStateRefs.get(globalStateRef) ?? [];
-                    properties.push({name: propertyName, value: value.value});
-                    globalStateRefs.set(globalStateRef, properties);
+                    globalStateRefs.add(globalStateRef);
                 }
             }
         }
@@ -372,6 +368,21 @@ export abstract class StyleLayer extends Evented {
 
             if ((value.value.kind === 'source' || value.value.kind === 'composite') &&
                 value.value.isStateDependent) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    isGlobalStateDependent() {
+        for (const property in (this as any).paint._values) {
+            const value = (this as any).paint.get(property);
+            if (!(value instanceof PossiblyEvaluatedPropertyValue) || !supportsPropertyExpression(value.property.specification)) {
+                continue;
+            }
+
+            if ((value.value.kind === 'source' || value.value.kind === 'composite') &&
+                value.value.globalStateRefs.size > 0) {
                 return true;
             }
         }

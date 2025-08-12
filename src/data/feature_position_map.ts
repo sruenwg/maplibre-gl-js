@@ -29,6 +29,10 @@ export class FeaturePositionMap {
         this.positions.push(index, start, end);
     }
 
+    getUniqueFeatureIds() {
+        return new Set(this.ids);
+    }
+
     getPositions(id: unknown): Array<FeaturePosition> {
         if (!this.indexed) throw new Error('Trying to get index, but feature positions are not indexed');
 

@@ -55,6 +55,8 @@ export class CircleBucket<Layer extends CircleStyleLayer | HeatmapStyleLayer> im
     layers: Array<Layer>;
     stateDependentLayers: Array<Layer>;
     stateDependentLayerIds: Array<string>;
+    globalStateDependentLayers: Array<Layer>;
+    globalStateDependentLayerIds: Array<string>;
 
     layoutVertexArray: CircleLayoutArray;
     layoutVertexBuffer: VertexBuffer;
@@ -81,6 +83,7 @@ export class CircleBucket<Layer extends CircleStyleLayer | HeatmapStyleLayer> im
         this.segments = new SegmentVector();
         this.programConfigurations = new ProgramConfigurationSet(options.layers, options.zoom);
         this.stateDependentLayerIds = this.layers.filter((l) => l.isStateDependent()).map((l) => l.id);
+        this.globalStateDependentLayerIds = this.layers.filter((l) => l.isGlobalStateDependent()).map((l) => l.id);
     }
 
     populate(features: Array<IndexedFeature>, options: PopulateParameters, canonical: CanonicalTileID) {
@@ -142,12 +145,14 @@ export class CircleBucket<Layer extends CircleStyleLayer | HeatmapStyleLayer> im
         }
     }
 
-    update(states: FeatureStates, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}) {
+    update(featureStates: FeatureStates, globalState: Record<string, any>, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}) {
         if (!this.stateDependentLayers.length) return;
-        this.programConfigurations.updatePaintArrays(states, vtLayer, this.stateDependentLayers, {
-            imagePositions,
-            globalState: this.globalState
-        });
+        this.programConfigurations.updatePaintArrays(featureStates, vtLayer, this.stateDependentLayers, {imagePositions, globalState});
+    }
+
+    updateAll(featureStates: FeatureStates, globalState: Record<string, any>, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}) {
+        if (!this.globalStateDependentLayers.length) return;
+        this.programConfigurations.updateAllPaintArrays(featureStates, vtLayer, this.globalStateDependentLayers, {imagePositions, globalState});
     }
 
     isEmpty() {
